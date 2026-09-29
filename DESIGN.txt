@@ -1,0 +1,69 @@
+# Design Documentation
+
+## Architecture
+
+| Layer | Where | Responsibility |
+|-------|-------|----------------|
+| Presentation | `main.py` | Menus, prompts, formatted output |
+| Business logic | `parking.py` | Slot assignment, entry, removal, billing, search, statistics |
+| Data access | SQLite (`parking.db`) | Persistent storage of slots and parked vehicles |
+
+## Database schema
+
+**parking_slots**
+
+| Column | Type | Notes |
+|--------|------|-------|
+| slot_number | INTEGER | Primary key (1-20) |
+| vehicle_number | TEXT | NULL when free |
+| occupied | INTEGER | 0 = available, 1 = occupied |
+
+**vehicles**
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | INTEGER | Auto-increment primary key |
+| vehicle_number | TEXT | UNIQUE - prevents duplicate parking |
+| owner_name | TEXT | |
+| vehicle_type | TEXT | Bike / Car / Other |
+| slot_number | INTEGER | Assigned slot |
+| entry_time | TEXT | `YYYY-MM-DD HH:MM:SS` |
+
+## Vehicle entry workflow
+
+```mermaid
+flowchart TD
+    A[Vehicle arrives] --> B[Enter vehicle details]
+    B --> C{Already parked?}
+    C -- Yes --> X[Reject]
+    C -- No --> D{Free slot?}
+    D -- No --> Y[Parking full]
+    D -- Yes --> E[Store vehicle + entry time]
+    E --> F[Mark slot occupied]
+```
+
+## Vehicle removal workflow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as Application
+    participant DB as SQLite
+    U->>A: Enter vehicle number
+    A->>DB: SELECT vehicle
+    DB-->>A: Vehicle record
+    A->>A: Calculate duration and fee
+    A->>DB: UPDATE parking slot (free)
+    A->>DB: DELETE vehicle record
+    A-->>U: Print parking bill
+```
+
+## Design decisions
+
+- **SQLite** - lightweight, file-based, bundled with Python.
+- **Two tables** - slot status and vehicle data are managed independently.
+- **First available slot** - slots are searched in ascending order.
+- **`math.ceil()` billing** - partial hours are rounded up; minimum charge is one hour.
+- **Transactions** - entry and removal update both tables inside one `with conn:` block, so they never get out of sync.
+- **Logic separated from UI** - `parking.py` never calls `input()` or `print()`, which makes it unit-testable.
+
